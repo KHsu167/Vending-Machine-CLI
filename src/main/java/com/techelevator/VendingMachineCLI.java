@@ -6,9 +6,10 @@ import com.techelevator.exceptions.ProductOutOfStockException;
 import com.techelevator.products.*;
 import com.techelevator.view.Menu;
 
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class VendingMachineCLI {
@@ -37,12 +38,9 @@ public class VendingMachineCLI {
 	public VendingMachineCLI(Menu menu) {
 		this.menu = menu;
 		stockMachine(new File("vendingmachine.csv"));
-		printProducts();
-		try {
-			buyProduct("B1");
-		} catch (Exception e) {
-			System.err.println(e.getMessage());
-		}
+
+
+		feedMoney(BigDecimal.valueOf(5.00));
 
 	}
 
@@ -80,6 +78,9 @@ public class VendingMachineCLI {
 		for (Map.Entry<Product,Integer> entry : supplyMap.entrySet()) {
 			Product product = entry.getKey();
 			String productDescription = "[" + product.getSlotLocation() + "] " + product.getName() + " $" + product.getPrice();
+			if (entry.getValue() == 0) {
+				productDescription += " SOLD OUT";
+			}
 			productLines.add(productDescription);
 		}
 		Collections.sort(productLines);
@@ -106,8 +107,49 @@ public class VendingMachineCLI {
 			throw new NotEnoughMoneyException(balance, productToBuy.getPrice());
 		}
 		supplyMap.put(productToBuy, supplyLeft - 1);
-		balance.subtract(productToBuy.getPrice());
+		balance = balance.subtract(productToBuy.getPrice());
 		System.out.println(productToBuy.getMessage());
+
+		logToFile(productToBuy.getName() + " " + code, productToBuy.getPrice(), balance);
+	}
+
+	public void feedMoney(BigDecimal money) {
+		balance = balance.add(money);
+		logToFile("FEED MONEY:", money, balance);
+	}
+
+	public void finishTransaction() {
+		BigDecimal oldBalance = balance;
+		int numberOfQuarters = 0;
+		int numberOfDimes = 0;
+		int numberOfNickels = 0;
+		while (balance.compareTo(BigDecimal.valueOf(0.25)) != -1) {
+			balance = balance.subtract(BigDecimal.valueOf(0.25));
+			numberOfQuarters++;
+		}
+		while (balance.compareTo(BigDecimal.valueOf(0.10)) != -1) {
+			balance = balance.subtract(BigDecimal.valueOf(0.10));
+			numberOfDimes++;
+		}
+		while (balance.compareTo(BigDecimal.valueOf(0.05)) != -1) {
+			balance = balance.subtract(BigDecimal.valueOf(0.05));
+			numberOfNickels++;
+		}
+		logToFile("GIVE CHANGE:", oldBalance, balance);
+
+		System.out.printf("Returning %d Quarter(s) %d Dime(s) %d Nickel(s)", numberOfQuarters, numberOfDimes, numberOfNickels);
+	}
+
+	public void logToFile(String description, BigDecimal amount, BigDecimal balance) {
+		LocalDateTime now = LocalDateTime.now();
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm:ss a");
+		String dateAndTime = formatter.format(now);
+		try (PrintWriter writer = new PrintWriter(new FileWriter("Log.txt", true))) {
+//			writer.printf(dateAndTime + " " + description + " $" + amount + " $" + balance);
+			writer.printf("%s %s $%.2f $%.2f", dateAndTime, description, amount, balance);
+		} catch (IOException e) {
+			System.err.println("File Not Found");
+		}
 	}
 
 	public void run() {
