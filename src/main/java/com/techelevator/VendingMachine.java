@@ -6,13 +6,12 @@ import com.techelevator.exceptions.ProductOutOfStockException;
 import com.techelevator.products.*;
 import com.techelevator.view.Menu;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-public class VendingMachineCLI {
+public class VendingMachine {
 
 	private Map<Product, Integer> supplyMap = new HashMap<>();
 	private BigDecimal balance = new BigDecimal("0.00");
@@ -21,6 +20,11 @@ public class VendingMachineCLI {
 	private static final String MAIN_MENU_OPTION_PURCHASE = "Purchase";
 	private static final String MAIN_MENU_OPTION_EXIT = "Exit";
 	private static final String[] MAIN_MENU_OPTIONS = { MAIN_MENU_OPTION_DISPLAY_ITEMS, MAIN_MENU_OPTION_PURCHASE, MAIN_MENU_OPTION_EXIT };
+	private static final String MAIN_MENU_OPTION_SECRET_REPORT = "Report";
+
+	public Map<Product, Integer> getSupplyMap() {
+		return supplyMap;
+	}
 
 	private static final String PURCHASE_MENU_OPTION_FEED_MONEY = "Feed Money";
 	private static final String PURCHASE_MENU_OPTION_SELECT_PRODUCT = "Select Product";
@@ -28,20 +32,18 @@ public class VendingMachineCLI {
 	private static final String[] PURCHASE_MENU_OPTIONS = {PURCHASE_MENU_OPTION_FEED_MONEY,PURCHASE_MENU_OPTION_SELECT_PRODUCT,PURCHASE_MENU_OPTION_FINISH_TRANSACTION};
 
 	private Menu menu;
+	private ReportLog reportLog;
 
 	public static void main(String[] args) {
 		Menu menu = new Menu(System.in, System.out);
-		VendingMachineCLI cli = new VendingMachineCLI(menu);
+		VendingMachine cli = new VendingMachine(menu);
 		cli.run();
 	}
 
-	public VendingMachineCLI(Menu menu) {
+	public VendingMachine(Menu menu) {
 		this.menu = menu;
 		stockMachine(new File("vendingmachine.csv"));
-
-
-		feedMoney(BigDecimal.valueOf(5.00));
-
+		reportLog = new ReportLog(supplyMap);
 	}
 
 	private void stockMachine(File file) {
@@ -85,13 +87,14 @@ public class VendingMachineCLI {
 		}
 		Collections.sort(productLines);
 		for (String line : productLines) {
-			System.out.println(line);
+			System.out.println(line); //TODO
 		}
 	}
 
 	private Product findProduct(String code) {
+		String lowercaseCode = code.toLowerCase();
 		for (Map.Entry<Product,Integer> entry : supplyMap.entrySet()) {
-			if (entry.getKey().getSlotLocation().equals(code)) {
+			if (entry.getKey().getSlotLocation().toLowerCase().equals(lowercaseCode)) {
 				return entry.getKey();
 			}
 		}
@@ -108,14 +111,14 @@ public class VendingMachineCLI {
 		}
 		supplyMap.put(productToBuy, supplyLeft - 1);
 		balance = balance.subtract(productToBuy.getPrice());
-		System.out.println(productToBuy.getMessage());
-
-		logToFile(productToBuy.getName() + " " + code, productToBuy.getPrice(), balance);
+		System.out.println(productToBuy.getMessage()); //TODO MOVE
+		reportLog.updateReport(productToBuy);
+		reportLog.logToFile(productToBuy.getName() + " " + code.toUpperCase(), productToBuy.getPrice(), balance);
 	}
 
 	public void feedMoney(BigDecimal money) {
 		balance = balance.add(money);
-		logToFile("FEED MONEY:", money, balance);
+		reportLog.logToFile("FEED MONEY:", money, balance);
 	}
 
 	public void finishTransaction() {
@@ -135,37 +138,36 @@ public class VendingMachineCLI {
 			balance = balance.subtract(BigDecimal.valueOf(0.05));
 			numberOfNickels++;
 		}
-		logToFile("GIVE CHANGE:", oldBalance, balance);
+		reportLog.logToFile("GIVE CHANGE:", oldBalance, balance);
 
-		System.out.printf("Returning %d Quarter(s) %d Dime(s) %d Nickel(s)", numberOfQuarters, numberOfDimes, numberOfNickels);
-	}
-
-	public void logToFile(String description, BigDecimal amount, BigDecimal balance) {
-		LocalDateTime now = LocalDateTime.now();
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm:ss a");
-		String dateAndTime = formatter.format(now);
-		try (PrintWriter writer = new PrintWriter(new FileWriter("Log.txt", true))) {
-//			writer.printf(dateAndTime + " " + description + " $" + amount + " $" + balance);
-			writer.printf("%s %s $%.2f $%.2f", dateAndTime, description, amount, balance);
-		} catch (IOException e) {
-			System.err.println("File Not Found");
-		}
+		System.out.printf("Returning %d Quarter(s) %d Dime(s) %d Nickel(s)", numberOfQuarters, numberOfDimes, numberOfNickels); //TODO
 	}
 
 	public void run() {
-
-		/*
-		  ===== you nay use/modify the existing Menu class or write your own ======
 		while (true) {
-			String choice = (String) menu.getChoiceFromOptions(MAIN_MENU_OPTIONS);
-
-			if (choice.equals(MAIN_MENU_OPTION_DISPLAY_ITEMS)) {
-				// display vending machine items
-			} else if (choice.equals(MAIN_MENU_OPTION_PURCHASE)) {
-				// do purchase
+			String input = menu.getChoiceFromOptions(MAIN_MENU_OPTIONS);
+			if (input.equals(MAIN_MENU_OPTION_DISPLAY_ITEMS)) {
+				printProducts();
+			} else if (input.equals(MAIN_MENU_OPTION_PURCHASE)) {
+				System.out.printf("Current Money Provided: $%.2f%n%n", balance);
+				input = menu.getChoiceFromOptions(PURCHASE_MENU_OPTIONS);
+				if (input.equals(PURCHASE_MENU_OPTION_FEED_MONEY)) {
+					feedMoney(menu.getMoneyFromUser());
+				} else if (input.equals(PURCHASE_MENU_OPTION_SELECT_PRODUCT)) {
+					try {
+						buyProduct(menu.getCodeFromUser());
+					} catch (Exception e) {
+						System.err.println(e.getMessage());
+					}
+				} else if (input.equals(PURCHASE_MENU_OPTION_FINISH_TRANSACTION)) {
+					finishTransaction();
+				}
+			} else if (input.equals(MAIN_MENU_OPTION_EXIT)) {
+				return;
+			} else if (input.equals(MAIN_MENU_OPTION_SECRET_REPORT)) {
+				reportLog.getReport();
 			}
 		}
-		 */
 	}
 
 }
