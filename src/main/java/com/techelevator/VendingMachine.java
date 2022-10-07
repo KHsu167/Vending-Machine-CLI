@@ -16,34 +16,17 @@ public class VendingMachine {
 	private Map<Product, Integer> supplyMap = new HashMap<>();
 	private BigDecimal balance = new BigDecimal("0.00");
 
-	private static final String MAIN_MENU_OPTION_DISPLAY_ITEMS = "Display Vending Machine Items";
-	private static final String MAIN_MENU_OPTION_PURCHASE = "Purchase";
-	private static final String MAIN_MENU_OPTION_EXIT = "Exit";
-	private static final String[] MAIN_MENU_OPTIONS = { MAIN_MENU_OPTION_DISPLAY_ITEMS, MAIN_MENU_OPTION_PURCHASE, MAIN_MENU_OPTION_EXIT };
-	private static final String MAIN_MENU_OPTION_SECRET_REPORT = "Report";
 
-	public Map<Product, Integer> getSupplyMap() {
-		return supplyMap;
-	}
-
-	private static final String PURCHASE_MENU_OPTION_FEED_MONEY = "Feed Money";
-	private static final String PURCHASE_MENU_OPTION_SELECT_PRODUCT = "Select Product";
-	private static final String PURCHASE_MENU_OPTION_FINISH_TRANSACTION = "Finish Transaction";
-	private static final String[] PURCHASE_MENU_OPTIONS = {PURCHASE_MENU_OPTION_FEED_MONEY,PURCHASE_MENU_OPTION_SELECT_PRODUCT,PURCHASE_MENU_OPTION_FINISH_TRANSACTION};
-
-	private Menu menu;
 	private ReportLog reportLog;
 
-	public static void main(String[] args) {
-		Menu menu = new Menu(System.in, System.out);
-		VendingMachine cli = new VendingMachine(menu);
-		cli.run();
-	}
+	public VendingMachine() {
 
-	public VendingMachine(Menu menu) {
-		this.menu = menu;
 		stockMachine(new File("vendingmachine.csv"));
 		reportLog = new ReportLog(supplyMap);
+	}
+
+	public BigDecimal getBalance() {
+		return balance;
 	}
 
 	private void stockMachine(File file) {
@@ -75,7 +58,7 @@ public class VendingMachine {
 		}
 	}
 
-	public void printProducts() {
+	public List<String> printProducts() {
 		List<String> productLines = new ArrayList<>();
 		for (Map.Entry<Product,Integer> entry : supplyMap.entrySet()) {
 			Product product = entry.getKey();
@@ -86,9 +69,7 @@ public class VendingMachine {
 			productLines.add(productDescription);
 		}
 		Collections.sort(productLines);
-		for (String line : productLines) {
-			System.out.println(line); //TODO
-		}
+		return productLines;
 	}
 
 	private Product findProduct(String code) {
@@ -101,7 +82,7 @@ public class VendingMachine {
 		throw new IllegalCodeException(code);
 	}
 
-	public void buyProduct(String code) {
+	public String buyProduct(String code) {
 		Product productToBuy = findProduct(code);
 		int supplyLeft = supplyMap.get(productToBuy);
 		if (supplyLeft < 1) {
@@ -111,9 +92,9 @@ public class VendingMachine {
 		}
 		supplyMap.put(productToBuy, supplyLeft - 1);
 		balance = balance.subtract(productToBuy.getPrice());
-		System.out.println(productToBuy.getMessage()); //TODO MOVE
 		reportLog.updateReport(productToBuy);
 		reportLog.logToFile(productToBuy.getName() + " " + code.toUpperCase(), productToBuy.getPrice(), balance);
+		return productToBuy.getMessage();
 	}
 
 	public void feedMoney(BigDecimal money) {
@@ -121,53 +102,16 @@ public class VendingMachine {
 		reportLog.logToFile("FEED MONEY:", money, balance);
 	}
 
-	public void finishTransaction() {
+	public Change finishTransaction() {
 		BigDecimal oldBalance = balance;
-		int numberOfQuarters = 0;
-		int numberOfDimes = 0;
-		int numberOfNickels = 0;
-		while (balance.compareTo(BigDecimal.valueOf(0.25)) != -1) {
-			balance = balance.subtract(BigDecimal.valueOf(0.25));
-			numberOfQuarters++;
-		}
-		while (balance.compareTo(BigDecimal.valueOf(0.10)) != -1) {
-			balance = balance.subtract(BigDecimal.valueOf(0.10));
-			numberOfDimes++;
-		}
-		while (balance.compareTo(BigDecimal.valueOf(0.05)) != -1) {
-			balance = balance.subtract(BigDecimal.valueOf(0.05));
-			numberOfNickels++;
-		}
+		Change change = new Change(balance);
+		balance = BigDecimal.valueOf(0.00);
+
 		reportLog.logToFile("GIVE CHANGE:", oldBalance, balance);
-
-		System.out.printf("Returning %d Quarter(s) %d Dime(s) %d Nickel(s)", numberOfQuarters, numberOfDimes, numberOfNickels); //TODO
+		return change;
 	}
 
-	public void run() {
-		while (true) {
-			String input = menu.getChoiceFromOptions(MAIN_MENU_OPTIONS);
-			if (input.equals(MAIN_MENU_OPTION_DISPLAY_ITEMS)) {
-				printProducts();
-			} else if (input.equals(MAIN_MENU_OPTION_PURCHASE)) {
-				System.out.printf("Current Money Provided: $%.2f%n%n", balance);
-				input = menu.getChoiceFromOptions(PURCHASE_MENU_OPTIONS);
-				if (input.equals(PURCHASE_MENU_OPTION_FEED_MONEY)) {
-					feedMoney(menu.getMoneyFromUser());
-				} else if (input.equals(PURCHASE_MENU_OPTION_SELECT_PRODUCT)) {
-					try {
-						buyProduct(menu.getCodeFromUser());
-					} catch (Exception e) {
-						System.err.println(e.getMessage());
-					}
-				} else if (input.equals(PURCHASE_MENU_OPTION_FINISH_TRANSACTION)) {
-					finishTransaction();
-				}
-			} else if (input.equals(MAIN_MENU_OPTION_EXIT)) {
-				return;
-			} else if (input.equals(MAIN_MENU_OPTION_SECRET_REPORT)) {
-				reportLog.getReport();
-			}
-		}
+	public void getReportLog() {
+		reportLog.getReport();
 	}
-
 }
